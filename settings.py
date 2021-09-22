@@ -1,0 +1,8 @@
+
+API_KEY = None
+API_KEY_SECRET = None
+
+ACCESS_TOKEN = None
+ACCESS_TOKEN_SECRET = None
+
+DEV_TWITTER = None

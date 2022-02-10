@@ -21,7 +21,12 @@ class Page:
 
 
 def webhallen(resp: Response) -> bool:
-    return resp.status_code == 200
+    data = resp.json()
+    if resp.status_code != 200:
+        return False
+    if 9 in data['product']['statusCodes']:
+        return False
+    return True
 
 
 def ginza(resp: Response) -> bool:

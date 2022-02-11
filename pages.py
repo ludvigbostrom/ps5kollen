@@ -79,7 +79,8 @@ def komplett(resp: Response) -> bool:
 def power(resp: Response) -> bool:
     products = resp.json()
     if len(products) > 0 and products[0]['StockCount'] > 0:
-        return True
+        if products[0]['AddToCartDisabledTo'] is None:
+            return True
     return False
 
 

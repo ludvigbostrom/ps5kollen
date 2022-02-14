@@ -20,6 +20,15 @@ class Page:
         return self.check(resp)
 
 
+@dataclass
+class PostPage(Page):
+    post_data: dict = None
+
+    def check_stock(self):
+        resp = requests.post(self.url, headers=self.headers, data=self.post_data, timeout=10)
+        return self.check(resp)
+
+
 def webhallen(resp: Response) -> bool:
     data = resp.json()
     if resp.status_code != 200:
@@ -97,6 +106,24 @@ def mediamarkt(resp: Response) -> bool:
     price_sidebar = soup.find('div', class_='price-sidebar')
     if price_sidebar.find('a', class_='instockonline'):
         return True
+    return False
+
+
+def spelochsant_se(resp: Response) -> bool:
+    data = resp.json()
+    for product in data['products']:
+        if 'digital' in product['name'].lower():
+            continue
+        if int(product['stock']['quantity']) > 0:
+            return True
+    return False
+
+
+def spelochsant_de(resp: Response) -> bool:
+    data = resp.json()
+    for product in data['products']:
+        if int(product['stock']['quantity']) > 0:
+            return True
     return False
 
 
@@ -215,5 +242,24 @@ MEDIAMARKT_DE = Page(
     msg='MediaMarkt har nu Playstation 5 Digital edition i lager.',
 )
 
+SPELOCHSANT_SE = PostPage(
+    name='Spel och Sånt Standard edition',
+    url='https://www.spelochsant.se/products/json',
+    post_data={'category': 369},
+    check=spelochsant_se,
+    msg='Spel och Sånt har nu Playstation 5 Standard edition i lager.',
+    visit_url='https://www.spelochsant.se/kategori/playstation5/konsol',
+)
+
+SPELOCHSANT_DE = PostPage(
+    name='Spel och Sånt Digital edition',
+    url='https://www.spelochsant.se/products/json',
+    post_data={'category': 369, 'list_search': 'digital'},
+    check=spelochsant_de,
+    msg='Spel och Sånt har nu Playstation 5 Digital edition i lager.',
+    visit_url='https://www.spelochsant.se/kategori/playstation5/konsol',
+)
+
+
 PAGES = [WEBHALLEN_DE, WEBHALLEN_SE, INET_DE, INET_SE, NETONNET_SE, NETONNET_DE, POWER_DE, POWER_SE, KOMPLETT_DE,
-         KOMPLETT_SE, MAXGAMING_DE, MAXGAMING_SE, MEDIAMARKT_SE, GINZA_SE, GINZA_DE]
+         KOMPLETT_SE, MAXGAMING_DE, MAXGAMING_SE, MEDIAMARKT_SE, GINZA_SE, GINZA_DE, SPELOCHSANT_DE, SPELOCHSANT_SE]

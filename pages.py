@@ -50,7 +50,7 @@ def inet(resp: Response) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
     qty_strings = soup.find_all('span', class_='qty-string')
     for s in qty_strings:
-        if s.text != '- st':
+        if s.text != '-\u00A0st':
             return True
     return False
 

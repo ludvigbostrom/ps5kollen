@@ -60,7 +60,7 @@ def netonnet(resp: Response) -> bool:
     tracking_products = soup.find_all('div', class_='cProductItem')
     for t in tracking_products:
         text = t.find('div', class_='smallHeader').find('div', class_='shortText').text
-        if ('PlayStation 5' in text or 'Playstation 5' in text) and 'Digital' not in text:
+        if 'playstation 5' in text.lower() and 'digital' not in text.lower():
             if t.find('div', class_='warehouseStockStatusContainer').find('i', class_='check'):
                 return True
     return False
@@ -71,7 +71,7 @@ def netonnet_digital(resp: Response) -> bool:
     tracking_products = soup.find_all('div', class_='cProductItem')
     for t in tracking_products:
         text = t.find('div', class_='smallHeader').find('div', class_='shortText').text
-        if 'PlayStation 5 Digital' in text or 'Playstation 5 Digital' in text:
+        if 'playstation 5 digital' in text.lower():
             if t.find('div', class_='warehouseStockStatusContainer').find('i', class_='check'):
                 return True
     return False

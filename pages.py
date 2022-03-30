@@ -126,6 +126,20 @@ def spelochsant_de(resp: Response) -> bool:
             return True
     return False
 
+def amazon_se(resp: Response) -> bool:
+    return amazon(resp, 'edition_10')
+
+def amazon_de(resp: Response) -> bool:
+    return amazon(resp, 'edition_0')
+
+def amazon(resp: Response, edition: str) -> bool:
+    soup = BeautifulSoup(resp.content, "html.parser")
+    selected_edition = soup.find('li', class_='swatchSelect')
+    if selected_edition['id'] == edition:
+        if soup.find('input', id='buy-now-button'):
+            return True
+    return False
+
 
 WEBHALLEN_SE = Page(
     name='Webhallen standard edition',
@@ -260,6 +274,42 @@ SPELOCHSANT_DE = PostPage(
     visit_url='https://www.spelochsant.se/kategori/playstation5/konsol',
 )
 
+AMAZON_SE = PostPage(
+    name='Amazon Standard edition',
+    url='https://www.amazon.se/dp/B08LLZ2CWD',
+    headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+    },
+    check=amazon_se,
+    msg='Amazon har nu Playstation 5 Standard edition i lager.',
+    visit_url='https://www.amazon.se/dp/B08LLZ2CWD',
+)
 
-PAGES = [WEBHALLEN_DE, WEBHALLEN_SE, INET_DE, INET_SE, NETONNET_SE, NETONNET_DE, POWER_DE, POWER_SE, KOMPLETT_DE,
-         KOMPLETT_SE, MAXGAMING_DE, MAXGAMING_SE, MEDIAMARKT_SE, GINZA_SE, GINZA_DE, SPELOCHSANT_DE, SPELOCHSANT_SE]
+AMAZON_DE = PostPage(
+    name='Amazon Digital edition',
+    url='https://www.amazon.se/dp/B08LM3KW18',
+    headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+    },
+    check=amazon_de,
+    msg='Amazon har nu Playstation 5 Digital edition i lager.',
+    visit_url='https://www.amazon.se/dp/B08LM3KW18',
+)
+
+
+PAGES = [
+    WEBHALLEN_DE, WEBHALLEN_SE, 
+    INET_DE, INET_SE, 
+    NETONNET_SE, NETONNET_DE, 
+    POWER_DE, POWER_SE, 
+    KOMPLETT_DE, KOMPLETT_SE, 
+    MAXGAMING_DE, MAXGAMING_SE, 
+    MEDIAMARKT_SE, 
+    GINZA_SE, GINZA_DE, 
+    SPELOCHSANT_DE, SPELOCHSANT_SE,
+    AMAZON_DE, AMAZON_SE,
+]

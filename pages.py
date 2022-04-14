@@ -114,6 +114,8 @@ def spelochsant_se(resp: Response) -> bool:
     for product in data['products']:
         if 'digital' in product['name'].lower():
             continue
+        if 'playstation 5' not in product['name'].lower():
+            continue
         if int(product['stock']['quantity']) > 0:
             return True
     return False

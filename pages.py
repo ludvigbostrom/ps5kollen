@@ -11,13 +11,14 @@ class Page:
     name: str
     url: str
     msg: str
-    check: Callable[[Response], bool] = lambda x: False
+    check: Callable[[Response, bool], bool] = lambda x, y, z: False
     headers: dict = None
     visit_url: str = None
+    is_digital: bool = False
 
     def check_stock(self):
         resp = requests.get(self.url, headers=self.headers, timeout=10)
-        return self.check(resp)
+        return self.check(resp, self.is_digital)
 
 
 @dataclass
@@ -26,16 +27,28 @@ class PostPage(Page):
 
     def check_stock(self):
         resp = requests.post(self.url, headers=self.headers, data=self.post_data, timeout=10)
-        return self.check(resp)
+        return self.check(resp, self.is_digital)
 
 
-def webhallen(resp: Response) -> bool:
+def is_valid_ps5(title: str, is_digital: bool) -> bool:
+    lower_title = title.lower()
+    return ((not is_digital and 'playstation 5' in lower_title and 'digital' not in lower_title) or
+            (is_digital and 'playstation 5' in lower_title and 'digital' in lower_title))
+
+
+def webhallen(resp: Response, is_digital: bool) -> bool:
     data = resp.json()
     if resp.status_code != 200:
         return False
-    if 9 in data['product']['statusCodes']:
+    if data['totalProductCount'] <= 0:
         return False
-    return True
+    in_stock = False
+    for product in data['products']:
+        name = product["name"]
+
+        if is_valid_ps5(name, is_digital) and product['stock']['web'] > 0 and 9 not in product['statusCodes']:
+            in_stock = True
+    return in_stock
 
 
 def ginza(resp: Response) -> bool:
@@ -46,95 +59,82 @@ def ginza(resp: Response) -> bool:
     return link.text.strip() != 'Bevaka'
 
 
-def inet(resp: Response) -> bool:
+def inet(resp: Response, is_digital: bool) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
-    qty_strings = soup.find_all('span', class_='qty-string')
-    for s in qty_strings:
-        if s.text != '-\u00A0st':
-            return True
-    return False
+    buttons = soup.find_all('button', class_='btn')
+    in_stock = False
+    for b in buttons:
+        if hasattr(b, 'attrs') and 'buy_button' in b.attrs.get('data-test-id', ''):
+            name = b.parent.parent.parent.findChild('a').attrs.get('aria-label', '').lower()
+            if is_valid_ps5(name, is_digital):
+                if b.text.lower() == 'köp':
+                    in_stock = True
+    return in_stock
 
 
-def netonnet(resp: Response) -> bool:
+def netonnet(resp: Response, is_digital: bool) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
     tracking_products = soup.find_all('div', class_='cProductItem')
     for t in tracking_products:
-        text = t.find('div', class_='smallHeader').find('div', class_='shortText').text
-        if 'playstation 5' in text.lower() and 'digital' not in text.lower():
+        title = t.find('div', class_='smallHeader').find('div', class_='shortText').text
+        if is_valid_ps5(title, is_digital):
             if t.find('div', class_='warehouseStockStatusContainer').find('i', class_='check'):
                 return True
     return False
 
 
-def netonnet_digital(resp: Response) -> bool:
+def power(resp: Response, is_digital: bool) -> bool:
+    data = resp.json()
+    if data['totalProductCount'] <= 0:
+        return False
+    products = data['products']
+    for product in products:
+        title = product['title']
+        if is_valid_ps5(title, is_digital):
+            if product['stockCount'] > 0:
+                if product.get('canAddToCart', False):
+                    return True
+    return False
+
+
+def maxgaming(resp: Response, is_digital: bool) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
-    tracking_products = soup.find_all('div', class_='cProductItem')
-    for t in tracking_products:
-        text = t.find('div', class_='smallHeader').find('div', class_='shortText').text
-        if 'playstation 5 digital' in text.lower():
-            if t.find('div', class_='warehouseStockStatusContainer').find('i', class_='check'):
-                return True
-    return False
+    product_items = soup.find_all('div', class_='PT_Wrapper')
+    in_stock = False
+    for product in product_items:
+        title = product.find('div', class_='PT_Beskr').text
+        if is_valid_ps5(title, is_digital):
+            if product.find('div', class_='PT_text_Lagerstatus').text.lower().strip() == 'i lager':
+                in_stock = True
+    return in_stock
 
 
-def komplett(resp: Response) -> bool:
+def mediamarkt(resp: Response, is_digital: bool) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
-    action_button = soup.find('div', class_='actionButton-completeGrid')
-    if action_button.find('div', class_='buy-button'):
-        return True
-    return False
+    product_list = soup.find('ul', class_='products-list')
+    product_items = product_list.find_all('div', class_='product-wrapper')
+    in_stock = False
+    for product in product_items:
+        title = product.find('div', class_='content').find('h2').text
+        if is_valid_ps5(title, is_digital):
+            meta = product.find('meta', itemprop='availability', content='InStock')
+            if product.find('meta', itemprop='availability', content='InStock'):
+                in_stock = True
+
+    return in_stock
 
 
-def power(resp: Response) -> bool:
-    products = resp.json()
-    if len(products) > 0 and products[0]['StockCount'] > 0:
-        if products[0]['AddToCartDisabledTo'] is None:
-            return True
-    return False
-
-
-def maxgaming(resp: Response) -> bool:
-    soup = BeautifulSoup(resp.content, "html.parser")
-    saldo_amount = soup.find('div', class_='saldoamount')
-    if int(saldo_amount['data-saldo']) > 0:
-        return True
-    return False
-
-
-def mediamarkt(resp: Response) -> bool:
-    soup = BeautifulSoup(resp.content, "html.parser")
-    price_sidebar = soup.find('div', class_='price-sidebar')
-    if price_sidebar.find('a', class_='instockonline'):
-        return True
-    return False
-
-
-def spelochsant_se(resp: Response) -> bool:
+def spelochsant(resp: Response, is_digital: bool) -> bool:
     data = resp.json()
     for product in data['products']:
-        if 'digital' in product['name'].lower():
-            continue
-        if 'playstation 5' not in product['name'].lower():
-            continue
-        if int(product['stock']['quantity']) > 0:
+        name = product['name']
+        if is_valid_ps5(name, is_digital) and int(product['stock']['quantity']) > 0:
             return True
     return False
 
 
-def spelochsant_de(resp: Response) -> bool:
-    data = resp.json()
-    for product in data['products']:
-        if int(product['stock']['quantity']) > 0:
-            return True
-    return False
-
-def amazon_se(resp: Response) -> bool:
-    return amazon(resp, 'edition_10')
-
-def amazon_de(resp: Response) -> bool:
-    return amazon(resp, 'edition_0')
-
-def amazon(resp: Response, edition: str) -> bool:
+def amazon(resp: Response, is_digital: bool) -> bool:
+    edition = 'edition_0' if is_digital else 'edition_10'
     soup = BeautifulSoup(resp.content, "html.parser")
     selected_edition = soup.find('li', class_='swatchSelect')
     if selected_edition['id'] == edition:
@@ -145,41 +145,42 @@ def amazon(resp: Response, edition: str) -> bool:
 
 WEBHALLEN_SE = Page(
     name='Webhallen standard edition',
-    url='https://www.webhallen.com/api/product/300815',
-    visit_url='https://www.webhallen.com/se/product/300815-Playstation-5-Konsol-PS5',
+    url='https://www.webhallen.com/api/search?query%5BsortBy%5D=sales&query%5Bfilters%5D%5B0%5D%5Btype%5D=category&query%5Bfilters%5D%5B0%5D%5Bvalue%5D=16279&query%5BminPrice%5D=0&query%5BmaxPrice%5D=999999&page=1',
+    visit_url='https://www.webhallen.com/se/category/16279-Konsol',
     check=webhallen,
+    is_digital=False,
     msg='Webhallen har nu Playstation 5 Standard edition i lager.',
 )
 WEBHALLEN_DE = Page(
     name='Webhallen digital edition',
-    url='https://www.webhallen.com/api/product/320479',
-    visit_url='https://www.webhallen.com/se/product/320479-Playstation-5-Digital-Edition',
+    url='https://www.webhallen.com/api/search?query%5BsortBy%5D=sales&query%5Bfilters%5D%5B0%5D%5Btype%5D=category&query%5Bfilters%5D%5B0%5D%5Bvalue%5D=16279&query%5BminPrice%5D=0&query%5BmaxPrice%5D=999999&page=1',
+    visit_url='https://www.webhallen.com/se/category/16279-Konsol',
     check=webhallen,
+    is_digital=True,
     msg='Webhallen har nu Playstation 5 Digital edition i lager.',
-)
-
-GINZA_SE = Page(
-    name='Ginza standard edition',
-    url='https://www.ginza.se/product/ps5-basenhet/406570/',
-    check=ginza,
-    msg='Ginza har nu Playstation 5 Standard edition i lager.',
-)
-GINZA_DE = Page(
-    name='Ginza digital edition',
-    url='https://www.ginza.se/product/ps5-basenhet-digital-edition/406571/',
-    check=ginza,
-    msg='Ginza har nu Playstation 5 Digital edition i lager.',
 )
 INET_SE = Page(
     name='Inet standard edition',
-    url='https://www.inet.se/produkt/6609649/sony-playstation-5',
+    url='https://www.inet.se/kategori/751/konsoler/180/sony',
     check=inet,
+    headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+    },
+    is_digital=False,
     msg='Inet har nu Playstation 5 Standard edition i lager.',
 )
 INET_DE = Page(
     name='Inet digital edition',
-    url='https://www.inet.se/produkt/6609862/sony-playstation-5-digital-edition',
+    url='https://www.inet.se/kategori/751/konsoler/180/sony',
     check=inet,
+    headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+    },
+    is_digital=True,
     msg='Inet har nu Playstation 5 Digital edition i lager.',
 )
 NETONNET_SE = Page(
@@ -191,12 +192,14 @@ NETONNET_SE = Page(
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Upgrade-Insecure-Requests': '1',
     },
+    is_digital=False,
     msg='NetOnNet har nu Playstation 5 Standard edition i lager.',
 )
 NETONNET_DE = Page(
     name='Netonnet digital edition',
     url='https://www.netonnet.se/art/gaming/spel-och-konsol/playstation/playstation-konsol',
-    check=netonnet_digital,
+    check=netonnet,
+    is_digital=True,
     headers={
         'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -206,55 +209,48 @@ NETONNET_DE = Page(
 )
 POWER_SE = Page(
     name='Power standard edition',
-    url='https://www.power.se/umbraco/api/product/getproductsbyids?ids=1077687',
-    visit_url='https://www.power.se/gaming/playstation/playstation-konsoler/playstation-5/p-1077687/',
+    url='https://www.power.se/api/v2/productlists?cat=7416&size=36&s=5&from=0&o=false',
+    visit_url='https://www.power.se/c/7416/gaming/playstation/playstation-konsoler/',
     check=power,
+    is_digital=False,
     msg='Power har nu Playstation 5 Standard edition i lager.',
 )
 POWER_DE = Page(
     name='Power digital edition',
-    url='https://www.power.se/umbraco/api/product/getproductsbyids?ids=1101680',
-    visit_url='https://www.power.se/gaming/playstation/playstation-konsoler/playstation-5-digital-edition/p-1101680/',
+    url='https://www.power.se/api/v2/productlists?cat=7416&size=36&s=5&from=0&o=false',
+    visit_url='https://www.power.se/c/7416/gaming/playstation/playstation-konsoler/',
     check=power,
+    is_digital=True,
     msg='Power har nu Playstation 5 Digital edition i lager.',
-)
-KOMPLETT_SE = Page(
-    name='Komplett standard edition',
-    url='https://www.komplett.se/product/1111557/gaming/playstation/playstation-5',
-    check=komplett,
-    msg='Komplett har nu Playstation 5 Standard edition i lager.',
-)
-KOMPLETT_DE = Page(
-    name='Komplett digital edition',
-    url='https://www.komplett.se/product/1161553/gaming/playstation/playstation-5-digital-edition',
-    check=komplett,
-    msg='Komplett har nu Playstation 5 Digital edition i lager.',
 )
 MAXGAMING_SE = Page(
     name='Maxgaming standard edition',
-    url='https://www.maxgaming.se/sv/playstation-5/playstation-5',
+    url='https://www.maxgaming.se/sv/konsol/playstation/playstation-5',
     check=maxgaming,
+    is_digital=False,
     msg='MaxGaming har nu Playstation 5 Standard edition i lager.',
 )
 MAXGAMING_DE = Page(
     name='Maxgaming digital edition',
-    url='https://www.maxgaming.se/sv/playstation-5/playstation-5-digiatal-edition',
+    url='https://www.maxgaming.se/sv/konsol/playstation/playstation-5',
     check=maxgaming,
+    is_digital=True,
     msg='MaxGaming har nu Playstation 5 Digital edition i lager.',
 )
 
 MEDIAMARKT_SE = Page(
     name='Mediamarkt standard edition',
-    url='https://www.mediamarkt.se/sv/product/_sony-playstation-5-ps5-1283580.html',
+    url='https://www.mediamarkt.se/sv/category/_playstation-5-konsoler-766514.html',
+    is_digital=False,
     check=mediamarkt,
     msg='MediaMarkt har nu Playstation 5 Standard edition i lager.',
 )
 
-# Mediamarkt Digital edition temporarily disabled. No actual listing on website.
 MEDIAMARKT_DE = Page(
     name='Mediamarkt digital edition',
-    url='https://www.mediamarkt.se/sv/product/_sony-playstation-5-ps5-digital-edition-1325322.html',
+    url='https://www.mediamarkt.se/sv/category/_playstation-5-konsoler-766514.html',
     check=mediamarkt,
+    is_digital=True,
     msg='MediaMarkt har nu Playstation 5 Digital edition i lager.',
 )
 
@@ -262,7 +258,8 @@ SPELOCHSANT_SE = PostPage(
     name='Spel och Sånt Standard edition',
     url='https://www.spelochsant.se/products/json',
     post_data={'category': 369},
-    check=spelochsant_se,
+    check=spelochsant,
+    is_digital=False,
     msg='Spel och Sånt har nu Playstation 5 Standard edition i lager.',
     visit_url='https://www.spelochsant.se/kategori/playstation5/konsol',
 )
@@ -270,8 +267,9 @@ SPELOCHSANT_SE = PostPage(
 SPELOCHSANT_DE = PostPage(
     name='Spel och Sånt Digital edition',
     url='https://www.spelochsant.se/products/json',
-    post_data={'category': 369, 'list_search': 'digital'},
-    check=spelochsant_de,
+    post_data={'category': 369},
+    check=spelochsant,
+    is_digital=True,
     msg='Spel och Sånt har nu Playstation 5 Digital edition i lager.',
     visit_url='https://www.spelochsant.se/kategori/playstation5/konsol',
 )
@@ -279,39 +277,36 @@ SPELOCHSANT_DE = PostPage(
 AMAZON_SE = PostPage(
     name='Amazon Standard edition',
     url='https://www.amazon.se/dp/B08LLZ2CWD',
+    check=amazon,
     headers={
         'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Upgrade-Insecure-Requests': '1',
     },
-    check=amazon_se,
+    is_digital=False,
     msg='Amazon har nu Playstation 5 Standard edition i lager.',
-    visit_url='https://www.amazon.se/dp/B08LLZ2CWD',
 )
 
-AMAZON_DE = PostPage(
+AMAZON_DE = Page(
     name='Amazon Digital edition',
     url='https://www.amazon.se/dp/B08LM3KW18',
+    check=amazon,
     headers={
         'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Upgrade-Insecure-Requests': '1',
     },
-    check=amazon_de,
+    is_digital=True,
     msg='Amazon har nu Playstation 5 Digital edition i lager.',
-    visit_url='https://www.amazon.se/dp/B08LM3KW18',
 )
 
-
 PAGES = [
-    WEBHALLEN_DE, WEBHALLEN_SE, 
-    INET_DE, INET_SE, 
-    NETONNET_SE, NETONNET_DE, 
-    POWER_DE, POWER_SE, 
-    KOMPLETT_DE, KOMPLETT_SE, 
-    MAXGAMING_DE, MAXGAMING_SE, 
-    MEDIAMARKT_SE, 
-    GINZA_SE, GINZA_DE, 
-    SPELOCHSANT_DE, SPELOCHSANT_SE,
-    AMAZON_DE, AMAZON_SE,
+     WEBHALLEN_DE, WEBHALLEN_SE,
+     INET_DE, INET_SE,
+     NETONNET_SE, NETONNET_DE,
+     POWER_DE, POWER_SE,
+     MAXGAMING_DE, MAXGAMING_SE,
+     MEDIAMARKT_DE, MEDIAMARKT_SE,
+     SPELOCHSANT_DE, SPELOCHSANT_SE,
+      AMAZON_DE, AMAZON_SE,
 ]

@@ -115,9 +115,12 @@ def mediamarkt(resp: Response, is_digital: bool) -> bool:
     product_items = product_list.find_all('div', class_='product-wrapper')
     in_stock = False
     for product in product_items:
-        title = product.find('div', class_='content').find('h2').text
+        content = product.find('div', class_='content')
+        if not content:
+            print('Content not found')
+            continue
+        title = content.find('h2').text
         if is_valid_ps5(title, is_digital):
-            meta = product.find('meta', itemprop='availability', content='InStock')
             if product.find('meta', itemprop='availability', content='InStock'):
                 in_stock = True
 
@@ -137,6 +140,9 @@ def amazon(resp: Response, is_digital: bool) -> bool:
     edition = 'edition_0' if is_digital else 'edition_10'
     soup = BeautifulSoup(resp.content, "html.parser")
     selected_edition = soup.find('li', class_='swatchSelect')
+    if not selected_edition:
+        print('seleted_edition is None')
+        return False
     if selected_edition['id'] == edition:
         if soup.find('input', id='buy-now-button'):
             return True

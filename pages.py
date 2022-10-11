@@ -51,14 +51,6 @@ def webhallen(resp: Response, is_digital: bool) -> bool:
     return in_stock
 
 
-def ginza(resp: Response) -> bool:
-    soup = BeautifulSoup(resp.content, "html.parser")
-    price_area = soup.find('div', class_='price-area')
-    link = price_area.find('a')
-
-    return link.text.strip() != 'Bevaka'
-
-
 def inet(resp: Response, is_digital: bool) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
     buttons = soup.find_all('button', class_='btn')

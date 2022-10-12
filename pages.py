@@ -101,6 +101,19 @@ def maxgaming(resp: Response, is_digital: bool) -> bool:
     return in_stock
 
 
+def mediamarkt_second_step(url: str):
+    resp = requests.get(f'https://www.mediamarkt.se{url}', timeout=10)
+    soup = BeautifulSoup(resp.content, "html.parser")
+    price_sidebar = soup.find('div', class_='price-sidebar')
+    if not price_sidebar:
+        return False
+    add_to_cart_button = price_sidebar.find('a', class_='add-to-cart')
+    if add_to_cart_button and add_to_cart_button.text.lower().strip() == 'köp':
+        scripts = soup.find_all('script')
+        return not any(['$("a#pdp-add-to-cart span").text("Fullbokad");' in script.text for script in scripts])
+    return False
+
+
 def mediamarkt(resp: Response, is_digital: bool) -> bool:
     soup = BeautifulSoup(resp.content, "html.parser")
     product_list = soup.find('ul', class_='products-list')
@@ -111,10 +124,11 @@ def mediamarkt(resp: Response, is_digital: bool) -> bool:
         if not content:
             print('Content not found')
             continue
+
         title = content.find('h2').text
         if is_valid_ps5(title, is_digital):
-            if product.find('meta', itemprop='availability', content='InStock'):
-                in_stock = True
+            if product.find('a', class_='add-to-cart') or product.find('meta', itemprop='availability', content='InStock'):
+                in_stock = mediamarkt_second_step(content.find('a').attrs['href'])
 
     return in_stock
 
@@ -139,6 +153,23 @@ def amazon(resp: Response, is_digital: bool) -> bool:
         if soup.find('input', id='buy-now-button'):
             return True
     return False
+
+
+def komplett(resp: Response, is_digital: bool) -> bool:
+    soup = BeautifulSoup(resp.content, "html.parser")
+    product_items = soup.find_all('div', class_='product-list-item')
+    in_stock = False
+    for product in product_items:
+        content = product.find('div', class_='text-content')
+        if not content:
+            print('Content not found')
+            continue
+        title = content.find('h2').text
+        if is_valid_ps5(title, is_digital):
+            if product.find('i', class_='stockstatus-instock'):
+                in_stock = True
+
+    return in_stock
 
 
 WEBHALLEN_SE = Page(
@@ -272,7 +303,7 @@ SPELOCHSANT_DE = PostPage(
     visit_url='https://www.spelochsant.se/kategori/playstation5/konsol',
 )
 
-AMAZON_SE = PostPage(
+AMAZON_SE = Page(
     name='Amazon Standard edition',
     url='https://www.amazon.se/dp/B08LLZ2CWD',
     check=amazon,
@@ -297,14 +328,39 @@ AMAZON_DE = Page(
     is_digital=True,
     msg='Amazon har nu Playstation 5 Digital edition i lager.',
 )
+KOMPLETT_SE = Page(
+    name='Komplett Standard edition',
+    url='https://www.komplett.se/category/12769/gaming/playstation',
+    check=komplett,
+    is_digital=False,
+    headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+    },
+    msg='Komplett har nu Playstation 5 Standard edition i lager.',
+)
+KOMPLETT_DE = Page(
+    name='Komplett Digital edition',
+    url='https://www.komplett.se/category/12769/gaming/playstation',
+    check=komplett,
+    is_digital=True,
+    headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+    },
+    msg='Komplett har nu Playstation 5 Digital edition i lager.',
+)
 
 PAGES = [
-     WEBHALLEN_DE, WEBHALLEN_SE,
-     INET_DE, INET_SE,
-     NETONNET_SE, NETONNET_DE,
-     POWER_DE, POWER_SE,
-     MAXGAMING_DE, MAXGAMING_SE,
-     MEDIAMARKT_DE, MEDIAMARKT_SE,
-     SPELOCHSANT_DE, SPELOCHSANT_SE,
-      AMAZON_DE, AMAZON_SE,
+   WEBHALLEN_DE, WEBHALLEN_SE,
+   INET_DE, INET_SE,
+   NETONNET_SE, NETONNET_DE,
+   POWER_DE, POWER_SE,
+   MAXGAMING_DE, MAXGAMING_SE,
+   MEDIAMARKT_DE, MEDIAMARKT_SE,
+   SPELOCHSANT_DE, SPELOCHSANT_SE,
+   AMAZON_DE, AMAZON_SE,
+   KOMPLETT_DE, KOMPLETT_SE,
 ]

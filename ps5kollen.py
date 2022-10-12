@@ -33,9 +33,13 @@ def run():
                             post_tweet(t, tweet)
                         else:
                             print(f"Not really tweeting: {tweet}")
-                    TWEETS[page.name] = tweet
+                    TWEETS[page.name] = 5
                 elif page.name in TWEETS:
-                    TWEETS.pop(page.name)
+                    if TWEETS[page.name] == 0:
+                        TWEETS.pop(page.name)
+                    else:
+                        TWEETS[page.name] = TWEETS[page.name] - 1
+
             except Exception as ex:
                 e = traceback.format_exc()
                 print(ex)

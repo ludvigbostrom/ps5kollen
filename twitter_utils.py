@@ -10,7 +10,6 @@ from settings import DEV_TWITTER
 @dataclass
 class TweetData:
     page: Page
-    time: datetime
 
 
 def dm_developer_internal_exception(t: Twitter, errors: dict):
@@ -43,4 +42,4 @@ def dm_developer_page_exception(t: Twitter, stacktrace: str, page: Page = None):
 
 def post_tweet(t: Twitter, tweet_data: TweetData):
     url = tweet_data.page.visit_url or tweet_data.page.url
-    t.statuses.update(status=f"{tweet_data.page.msg} {tweet_data.time.isoformat(' ', 'seconds')} {url}")
+    t.statuses.update(status=f"{tweet_data.page.msg} {url}")

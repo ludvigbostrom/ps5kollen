@@ -27,7 +27,7 @@ def run():
                     if page.name in TWEETS:
                         print('Already tweeted')
                         continue
-                    tweet = TweetData(page=page, time=datetime.now())
+                    tweet = TweetData(page=page)
                     if counter > 0:
                         if t:
                             post_tweet(t, tweet)
